@@ -21,6 +21,16 @@ app.get('/api/stages', async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+//fetch routes from the database
+app.get('/api/routes', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM routes');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching routes:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
 
 // GET operations (joined info from saccos, routes, and stages)
 app.get('/api/operations', async (req, res) => {
