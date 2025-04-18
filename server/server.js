@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
+const pool = require('./db');
 
 const app = express();
 
@@ -11,65 +11,39 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Mock database data
-const stages = [
-  {
-    id: 1,
-    name: 'Kencom Stage',
-    latitude: -1.286389,
-    longitude: 36.817223
-  },
-  {
-    id: 2,
-    name: 'Ambassadeur Stage',
-    latitude: -1.292198,
-    longitude: 36.821945
-  },
-  {
-    id: 3,
-    name: 'Madaraka Stage',
-    latitude: -1.307240,
-    longitude: 36.813427
+// GET all stages from the database
+app.get('/api/stages', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM stages');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching stages:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
-];
-
-const operations = [
-  {
-    id: 1,
-    name: '2NK Sacco',
-    fromStageId: 1,
-    toStageId: 3,
-    frequency: 'Every 5 mins'
-  }
-];
-
-// API endpoints
-app.get('/api/stages', (req, res) => {
-  res.json(stages);
 });
 
-app.get('/api/operations', (req, res) => {
-  const opsWithStages = operations.map(op => {
-    const fromStage = stages.find(s => s.id === op.fromStageId);
-    const toStage = stages.find(s => s.id === op.toStageId);
-    
-    return {
-      ...op,
-      fromStage,
-      toStage
-    };
-  });
-  
-  res.json(opsWithStages);
+// GET operations (joined info from saccos, routes, and stages)
+app.get('/api/operations', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        sc.sacco_id,
+        sc.name AS sacco_name,
+        sc.base_fare,
+        r.display_name AS route_name,
+        s1.name AS from_stage,
+        s1.latitude AS from_latitude,
+        s1.longitude AS from_longitude
+      FROM saccos sc
+      JOIN routes r ON sc.route_id = r.route_id
+      JOIN stages s1 ON sc.home_stage_id = s1.stage_id
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching operations:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
 });
-
-// Serve static files in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../client/build')));
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
-  });
-}
 
 // Start server
 const PORT = process.env.PORT || 5000;
