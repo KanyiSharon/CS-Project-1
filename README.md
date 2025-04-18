@@ -1,4 +1,4 @@
-# 🚐 CBD Matatu Finder with CBD And More
+# 🚐 CBD Matatu Finder within CBD And More
 
 A web-based application designed to help Nairobi CBD commuters easily find matatus for their specific destinations, get  weather updates, and report or recover lost and found items. It also empowers matatu drivers with a platform to post traffic and incident updates, improving the daily commuting experience.
 
