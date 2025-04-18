@@ -5,9 +5,7 @@ import L from 'leaflet';
 import axios from 'axios';
 import './App.css';
 
-// Import Leaflet CSS
-
-// Fix marker icon issue in Leaflet + Webpack
+// Fix marker icon issue for Leaflet + Webpack
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
@@ -17,10 +15,12 @@ L.Icon.Default.mergeOptions({
 
 function App() {
   const [weather, setWeather] = useState(null);
+  const [stages, setStages] = useState([]);
 
+  // Fetch weather data
   useEffect(() => {
     const fetchWeather = async () => {
-      const apiKey = '17ced4ffb7c054e71e04110fd7051752'; //OpenWeatherMap API key
+      const apiKey = '17ced4ffb7c054e71e04110fd7051752'; // OpenWeatherMap API key
       const lat = -1.286389;
       const lon = 36.817223;
 
@@ -35,6 +35,20 @@ function App() {
     };
 
     fetchWeather();
+  }, []);
+
+  // Fetch stages from backend
+  useEffect(() => {
+    const fetchStages = async () => {
+      try {
+        const response = await axios.get('http://localhost:5000/api/stages');
+        setStages(response.data);
+      } catch (error) {
+        console.error('Error fetching stages:', error);
+      }
+    };
+
+    fetchStages();
   }, []);
 
   return (
@@ -54,19 +68,26 @@ function App() {
 
       <MapContainer
         center={[-1.286389, 36.817223]}
-        zoom={15}
+        zoom={14.5}
         scrollWheelZoom={false}
-        style={{ height: '300px', width: '100%', marginTop: '1rem', borderRadius: '10px' }}
+        style={{ height: '500px', width: '100%', marginTop: '1rem', borderRadius: '10px' }}
       >
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; OpenStreetMap contributors'
         />
-        <Marker position={[-1.286389, 36.817223]}>
-          <Popup>
-            Nairobi CBD <br /> Main Stage
-          </Popup>
-        </Marker>
+
+        {/* Render each stage as a Marker */}
+        {stages.map((stage) => (
+          <Marker
+            key={stage.stage_id}
+            position={[stage.latitude, stage.longitude]}
+          >
+            <Popup>
+              {stage.name}
+            </Popup>
+          </Marker>
+        ))}
       </MapContainer>
     </div>
   );
