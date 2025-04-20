@@ -21,6 +21,41 @@ app.get('/api/stages', async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
+// GET all saccos from the database
+app.get('/api/saccos', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM saccos');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching saccos:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// GET saccos with joined route and stage information
+app.get('/api/saccos/details', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        s.sacco_id,
+        s.name,
+        s.base_fare_range,
+        r.route_id,
+        r.display_name AS route_name,
+        st.stage_id,
+        st.name AS stage_name
+      FROM saccos s
+      LEFT JOIN routes r ON s.route_id = r.route_id
+      LEFT JOIN stages st ON s.sacco_stage_id = st.stage_id
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching sacco details:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 //fetch routes from the database
 app.get('/api/routes', async (req, res) => {
   try {
@@ -39,14 +74,14 @@ app.get('/api/operations', async (req, res) => {
       SELECT 
         sc.sacco_id,
         sc.name AS sacco_name,
-        sc.base_fare,
+        sc.base_fare_range,
         r.display_name AS route_name,
         s1.name AS from_stage,
-        s1.latitude AS from_latitude,
-        s1.longitude AS from_longitude
+        s1.latitude AS stage_latitude,
+        s1.longitude AS stage_longitude
       FROM saccos sc
       JOIN routes r ON sc.route_id = r.route_id
-      JOIN stages s1 ON sc.home_stage_id = s1.stage_id
+      JOIN stages s1 ON sc.sacco_stage_id = s1.stage_id
     `);
     res.json(result.rows);
   } catch (err) {
