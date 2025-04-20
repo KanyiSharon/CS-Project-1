@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import React, { useEffect, useState, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import axios from 'axios';
@@ -13,6 +13,44 @@ L.Icon.Default.mergeOptions({
   shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
 });
 
+// Create a pink marker icon (we'll need to create a new pink marker image or use CSS to color it)
+const createPinkGlowingIcon = () => {
+  // Create an HTML element for the custom pink marker
+  const pinkMarkerHtml = `
+    <div class="pink-marker-container">
+      <div class="pink-marker"></div>
+    </div>
+  `;
+
+  return L.divIcon({
+    html: pinkMarkerHtml,
+    className: 'pink-glow-marker',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34]
+  });
+};
+
+// Default icon
+const defaultIcon = new L.Icon({
+  iconUrl: require('leaflet/dist/images/marker-icon.png'),
+  iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
+  shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
+// Component to handle map view changes
+function MapController({ center, zoom }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, zoom);
+  }, [center, zoom, map]);
+  return null;
+}
+
 function App() {
   const [weather, setWeather] = useState(null);
   const [stages, setStages] = useState([]);
@@ -21,6 +59,8 @@ function App() {
   const [filteredOperations, setFilteredOperations] = useState([]);
   const [mapCenter, setMapCenter] = useState([-1.286389, 36.817223]);
   const [mapZoom, setMapZoom] = useState(14.5);
+  const [highlightedMarkerId, setHighlightedMarkerId] = useState(null);
+  const markersRef = useRef({});
 
   // Fetch weather data
   useEffect(() => {
@@ -59,7 +99,6 @@ function App() {
       try {
         const response = await axios.get('http://localhost:5000/api/operations');
         setOperations(response.data);
-        setFilteredOperations(response.data);
       } catch (error) {
         console.error('Error fetching operations:', error);
       }
@@ -70,7 +109,7 @@ function App() {
   // Handle search
   useEffect(() => {
     if (searchTerm.trim() === '') {
-      setFilteredOperations(operations);
+      setFilteredOperations([]);
       return;
     }
 
@@ -93,6 +132,57 @@ function App() {
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
   };
+
+  const highlightMarker = (operation) => {
+    setMapCenter([operation.stage_latitude, operation.stage_longitude]);
+    setMapZoom(17);
+    
+    // Set the highlighted marker ID
+    setHighlightedMarkerId(`op-${operation.sacco_id}`);
+    
+    // Remove highlight after 3 seconds
+    setTimeout(() => {
+      setHighlightedMarkerId(null);
+    }, 9000);
+  };
+
+  // Add CSS for pink marker and glowing effect
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes pinkGlow {
+        0% { filter: drop-shadow(0 0 0px rgba(255, 0, 255, 0.8)); }
+        50% { filter: drop-shadow(0 0 15px rgba(255, 0, 255, 0.8)); }
+        100% { filter: drop-shadow(0 0 0px rgba(255, 0, 255, 0.8)); }
+      }
+      
+      .pink-glow-marker {
+        animation: pinkGlow 1.5s ease-in-out infinite;
+        background: transparent;
+        border: none;
+      }
+      
+      .pink-marker-container {
+        position: relative;
+        width: 25px;
+        height: 41px;
+      }
+      
+      .pink-marker {
+        position: absolute;
+        width: 25px;
+        height: 41px;
+        background-image: url(${require('leaflet/dist/images/marker-icon.png')});
+        background-size: cover;
+        filter: hue-rotate(280deg) saturate(3);
+      }
+    `;
+    document.head.appendChild(style);
+    
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
 
   return (
     <div className="app">
@@ -121,32 +211,31 @@ function App() {
         <p>Loading weather data...</p>
       )}
 
-      {/* SACCO Search Results */}
-      <div className="search-results">
-        <h3>SACCO Information</h3>
-        {filteredOperations.length > 0 ? (
-          <div className="sacco-list">
-            {filteredOperations.map(operation => (
-              <div key={operation.sacco_id} className="sacco-card">
-                <h4>{operation.sacco_name}</h4>
-                <p><strong>Base Fare:</strong> {operation.base_fare_range}</p>
-                <p><strong>Route:</strong> {operation.route_name}</p>
-                <p><strong>Stage:</strong> {operation.from_stage}</p>
-                {operation.stage_latitude && operation.stage_longitude && (
-                  <button onClick={() => {
-                    setMapCenter([operation.stage_latitude, operation.stage_longitude]);
-                    setMapZoom(17);
-                  }}>
-                    Show on Map
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p>No SACCOs found matching your search.</p>
-        )}
-      </div>
+      {/* SACCO Search Results - Only show when searching */}
+      {searchTerm.trim() !== '' && (
+        <div className="search-results">
+          <h3>SACCO Information</h3>
+          {filteredOperations.length > 0 ? (
+            <div className="sacco-list">
+              {filteredOperations.map(operation => (
+                <div key={operation.sacco_id} className="sacco-card">
+                  <h4>{operation.sacco_name}</h4>
+                  <p><strong>Base Fare:</strong> {operation.base_fare_range}</p>
+                  <p><strong>Route:</strong> {operation.route_name}</p>
+                  <p><strong>Stage:</strong> {operation.from_stage}</p>
+                  {operation.stage_latitude && operation.stage_longitude && (
+                    <button onClick={() => highlightMarker(operation)}>
+                      Show on Map
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p>No SACCOs found matching your search.</p>
+          )}
+        </div>
+      )}
 
       {/* Map Section */}
       <MapContainer
@@ -154,8 +243,9 @@ function App() {
         zoom={mapZoom}
         scrollWheelZoom={true}
         style={{ height: '500px', width: '100%', marginTop: '1rem', borderRadius: '10px' }}
-        key={`${mapCenter[0]}-${mapCenter[1]}-${mapZoom}`} // Force re-render when center changes
       >
+        <MapController center={mapCenter} zoom={mapZoom} />
+        
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; OpenStreetMap contributors'
@@ -173,22 +263,23 @@ function App() {
           </Marker>
         ))}
         
-        {/* Highlight filtered operations on the map */}
-        {filteredOperations.map((operation) => (
-          operation.stage_latitude && operation.stage_longitude ? (
+        {/* Render filtered operations with potential highlighting */}
+        {filteredOperations.map((operation) => {
+          if (!operation.stage_latitude || !operation.stage_longitude) return null;
+          
+          const markerId = `op-${operation.sacco_id}`;
+          const isHighlighted = markerId === highlightedMarkerId;
+          
+          return (
             <Marker
-              key={`op-${operation.sacco_id}`}
+              key={markerId}
               position={[operation.stage_latitude, operation.stage_longitude]}
-              icon={new L.Icon({
-                iconUrl: require('leaflet/dist/images/marker-icon.png'),
-                iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
-                shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
-                iconSize: [25, 41],
-                iconAnchor: [12, 41],
-                popupAnchor: [1, -34],
-                shadowSize: [41, 41],
-                className: 'highlighted-marker'
-              })}
+              icon={isHighlighted ? createPinkGlowingIcon() : defaultIcon}
+              ref={(ref) => {
+                if (ref) {
+                  markersRef.current[markerId] = ref;
+                }
+              }}
             >
               <Popup>
                 <div>
@@ -199,8 +290,8 @@ function App() {
                 </div>
               </Popup>
             </Marker>
-          ) : null
-        ))}
+          );
+        })}
       </MapContainer>
     </div>
   );
