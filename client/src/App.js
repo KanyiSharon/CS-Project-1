@@ -16,6 +16,11 @@ L.Icon.Default.mergeOptions({
 function App() {
   const [weather, setWeather] = useState(null);
   const [stages, setStages] = useState([]);
+  const [operations, setOperations] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filteredOperations, setFilteredOperations] = useState([]);
+  const [mapCenter, setMapCenter] = useState([-1.286389, 36.817223]);
+  const [mapZoom, setMapZoom] = useState(14.5);
 
   // Fetch weather data
   useEffect(() => {
@@ -23,7 +28,6 @@ function App() {
       const apiKey = '17ced4ffb7c054e71e04110fd7051752'; // OpenWeatherMap API key
       const lat = -1.286389;
       const lon = 36.817223;
-
       try {
         const response = await axios.get(
           `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`
@@ -33,7 +37,6 @@ function App() {
         console.error('Error fetching weather data:', error);
       }
     };
-
     fetchWeather();
   }, []);
 
@@ -47,14 +50,66 @@ function App() {
         console.error('Error fetching stages:', error);
       }
     };
-
     fetchStages();
   }, []);
 
+  // Fetch operations (SACCO details with routes and stages)
+  useEffect(() => {
+    const fetchOperations = async () => {
+      try {
+        const response = await axios.get('http://localhost:5000/api/operations');
+        setOperations(response.data);
+        setFilteredOperations(response.data);
+      } catch (error) {
+        console.error('Error fetching operations:', error);
+      }
+    };
+    fetchOperations();
+  }, []);
+
+  // Handle search
+  useEffect(() => {
+    if (searchTerm.trim() === '') {
+      setFilteredOperations(operations);
+      return;
+    }
+
+    const searchTermLower = searchTerm.toLowerCase();
+    const filtered = operations.filter(operation => 
+      operation.sacco_name?.toLowerCase().includes(searchTermLower) ||
+      operation.route_name?.toLowerCase().includes(searchTermLower) ||
+      operation.from_stage?.toLowerCase().includes(searchTermLower)
+    );
+
+    setFilteredOperations(filtered);
+
+    // If we have search results, center the map on the first result
+    if (filtered.length > 0 && filtered[0].stage_latitude && filtered[0].stage_longitude) {
+      setMapCenter([filtered[0].stage_latitude, filtered[0].stage_longitude]);
+      setMapZoom(16); // Zoom in a bit more to see the specific location
+    }
+  }, [searchTerm, operations]);
+
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+  };
+
   return (
     <div className="app">
-      <h1>Nairobi CBD Map & Weather</h1>
+      <h1>Nairobi CBD Map & SACCO Information</h1>
+      
+      {/* Search Bar */}
+      <div className="search-container">
+        <input
+          type="text"
+          placeholder="Search by SACCO name, stage or route..."
+          value={searchTerm}
+          onChange={handleSearchChange}
+          className="search-input"
+        />
+      </div>
 
+      {/* Weather Section */}
       {weather ? (
         <div className="weather">
           <h3>Weather Forecast</h3>
@@ -66,27 +121,85 @@ function App() {
         <p>Loading weather data...</p>
       )}
 
+      {/* SACCO Search Results */}
+      <div className="search-results">
+        <h3>SACCO Information</h3>
+        {filteredOperations.length > 0 ? (
+          <div className="sacco-list">
+            {filteredOperations.map(operation => (
+              <div key={operation.sacco_id} className="sacco-card">
+                <h4>{operation.sacco_name}</h4>
+                <p><strong>Base Fare:</strong> {operation.base_fare_range}</p>
+                <p><strong>Route:</strong> {operation.route_name}</p>
+                <p><strong>Stage:</strong> {operation.from_stage}</p>
+                {operation.stage_latitude && operation.stage_longitude && (
+                  <button onClick={() => {
+                    setMapCenter([operation.stage_latitude, operation.stage_longitude]);
+                    setMapZoom(17);
+                  }}>
+                    Show on Map
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p>No SACCOs found matching your search.</p>
+        )}
+      </div>
+
+      {/* Map Section */}
       <MapContainer
-        center={[-1.286389, 36.817223]}
-        zoom={14.5}
-        scrollWheelZoom={false}
+        center={mapCenter}
+        zoom={mapZoom}
+        scrollWheelZoom={true}
         style={{ height: '500px', width: '100%', marginTop: '1rem', borderRadius: '10px' }}
+        key={`${mapCenter[0]}-${mapCenter[1]}-${mapZoom}`} // Force re-render when center changes
       >
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; OpenStreetMap contributors'
         />
-
-        {/* Render each stage as a Marker */}
+        
+        {/* Render all stages as Markers */}
         {stages.map((stage) => (
           <Marker
             key={stage.stage_id}
             position={[stage.latitude, stage.longitude]}
           >
             <Popup>
-              {stage.name}
+              <strong>{stage.name}</strong>
             </Popup>
           </Marker>
+        ))}
+        
+        {/* Highlight filtered operations on the map */}
+        {filteredOperations.map((operation) => (
+          operation.stage_latitude && operation.stage_longitude ? (
+            <Marker
+              key={`op-${operation.sacco_id}`}
+              position={[operation.stage_latitude, operation.stage_longitude]}
+              icon={new L.Icon({
+                iconUrl: require('leaflet/dist/images/marker-icon.png'),
+                iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
+                shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+                popupAnchor: [1, -34],
+                shadowSize: [41, 41],
+                className: 'highlighted-marker'
+              })}
+            >
+              <Popup>
+                <div>
+                  <h4>{operation.sacco_name}</h4>
+                  <p><strong>Base Fare:</strong> {operation.base_fare_range}</p>
+                  <p><strong>Route:</strong> {operation.route_name}</p>
+                  <p><strong>Stage:</strong> {operation.from_stage}</p>
+                </div>
+              </Popup>
+            </Marker>
+          ) : null
         ))}
       </MapContainer>
     </div>
