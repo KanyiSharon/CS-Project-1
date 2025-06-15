@@ -1,0 +1,252 @@
+/* src/styles/Map.css */
+:root {
+  --primary-green: #0a5d3b;
+  --accent-green: #8bd83b;
+  --light-green: #e8f5e2;
+  --dark-green: #043622;
+  --text-light: #ffffff;
+  --text-dark: #1a1a1a;
+  --card-radius: 16px;
+  --button-radius: 24px;
+}
+
+.map-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+  background-color: var(--light-green);
+  min-height: 100vh;
+}
+
+.map-container h1 {
+  color: var(--primary-green);
+  font-weight: 700;
+  font-size: 2.5rem;
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.map-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: white;
+  padding: 16px 24px;
+  border-radius: var(--card-radius);
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 12px rgba(10, 93, 59, 0.1);
+}
+
+.toggle-controls {
+  display: flex;
+  gap: 24px;
+}
+
+.toggle-controls label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-dark);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.toggle-controls input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-green);
+}
+
+.reset-view-btn {
+  background-color: var(--primary-green);
+  color: var(--text-light);
+  border: none;
+  padding: 10px 20px;
+  border-radius: var(--button-radius);
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.reset-view-btn:hover {
+  background-color: var(--dark-green);
+  transform: translateY(-2px);
+}
+
+.selected-operation-info {
+  background-color: var(--accent-green);
+  color: var(--dark-green);
+  padding: 16px 24px;
+  border-radius: var(--card-radius);
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 12px rgba(139, 216, 59, 0.2);
+  position: relative;
+}
+
+.selected-operation-info h3 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 1.3rem;
+}
+
+.selected-operation-info p {
+  margin: 6px 0;
+  font-weight: 500;
+}
+
+.selected-operation-info button {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background-color: var(--dark-green);
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.operations-sidebar {
+  background-color: white;
+  border-radius: var(--card-radius);
+  padding: 20px;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 12px rgba(10, 93, 59, 0.1);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.operations-sidebar h3 {
+  color: var(--primary-green);
+  margin-top: 0;
+  margin-bottom: 16px;
+  font-size: 1.2rem;
+}
+
+.operations-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+}
+
+.operation-item {
+  padding: 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.operation-item:hover {
+  border-color: var(--accent-green);
+  background-color: var(--light-green);
+}
+
+.operation-item.selected {
+  border-color: var(--primary-green);
+  background-color: var(--light-green);
+  border-width: 2px;
+}
+
+.operation-item h4 {
+  margin: 0 0 8px 0;
+  color: var(--primary-green);
+  font-size: 0.9rem;
+}
+
+.operation-item p {
+  margin: 0 0 8px 0;
+  color: var(--text-dark);
+  font-size: 0.8rem;
+}
+
+.operation-item button {
+  background-color: var(--accent-green);
+  color: var(--dark-green);
+  border: none;
+  padding: 6px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.operation-item button:hover {
+  background-color: #9be44c;
+}
+
+.map-wrapper {
+  border-radius: var(--card-radius);
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(4, 54, 34, 0.2);
+}
+
+@keyframes greenGlow {
+  0% { filter: drop-shadow(0 0 0px rgba(139, 216, 59, 0.8)); }
+  50% { filter: drop-shadow(0 0 15px rgba(139, 216, 59, 0.8)); }
+  100% { filter: drop-shadow(0 0 0px rgba(139, 216, 59, 0.8)); }
+}
+
+.green-glow-marker {
+  animation: greenGlow 1.5s ease-in-out infinite;
+  background: transparent;
+  border: none;
+}
+
+.green-marker-container {
+  position: relative;
+  width: 25px;
+  height: 41px;
+}
+
+.green-marker {
+  position: absolute;
+  width: 25px;
+  height: 41px;
+  background-image: url('~leaflet/dist/images/marker-icon.png');
+  background-size: cover;
+  filter: hue-rotate(100deg) saturate(2);
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: var(--card-radius);
+  box-shadow: 0 6px 18px rgba(10, 93, 59, 0.2);
+}
+
+.leaflet-popup-content h4 {
+  color: var(--primary-green);
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+.leaflet-popup-content p {
+  margin: 4px 0;
+  font-size: 0.9rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .map-container {
+    padding: 15px;
+  }
+  
+  .map-controls {
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+  }
+  
+  .toggle-controls {
+    justify-content: center;
+  }
+  
+  .operations-list {
+    grid-template-columns: 1fr;
+  }
+  
+  .operations-sidebar {
+    max-height: 200px;
+  }
+}
