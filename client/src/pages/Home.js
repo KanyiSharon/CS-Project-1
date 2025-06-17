@@ -547,7 +547,7 @@ function Home() {
         {/* SACCO Search Results */}
         {searchTerm.trim() !== '' && (
           <div className="search-results">
-            <h3>🚀 TRANSIT MATRIX</h3>
+            <h3></h3>
             {filteredOperations.length > 0 ? (
               <div className="sacco-list">
                 {filteredOperations.map(operation => (
@@ -558,7 +558,7 @@ function Home() {
                     <p><strong>Stage:</strong> {operation.from_stage}</p>
                     {operation.stage_latitude && operation.stage_longitude && (
                       <button onClick={() => highlightMarker(operation)}>
-                        🎯 LOCATE ON CYBER MAP
+                        🎯 LOCATE ON MAP
                       </button>
                     )}
                   </div>
