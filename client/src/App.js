@@ -16,9 +16,9 @@ function App() {
       <Route path="/" element={<Home />} />
       <Route path="/signup" element={<SignUp />} />
       <Route path="/login" element={<Login />} />
-      <Route path="/search" element={<Search />} />
-      <Route path="/map" element={<Map />} />
-      <Route path="/weather" element={<Weather />} />
+      {/* <Route path="/search" element={<Search />} /> */}
+      {/* <Route path="/map" element={<Map />} /> */}
+      {/* <Route path="/weather" element={<Weather />} /> */}
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
