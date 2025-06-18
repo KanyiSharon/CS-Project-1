@@ -1,16 +1,236 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const pool = require('./db');
 
 const app = express();
 
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/');
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'lost-item-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: function (req, file, cb) {
+    // Check if the file is an image
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
+
 // Middleware
 app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
-  credentials: true // This is the key fix!
+  credentials: true
 }));
 app.use(express.json());
+app.use('/uploads', express.static('uploads')); // Serve uploaded files
+
+// Simple session storage (in production, use proper session management)
+const sessions = new Map();
+
+// ===== AUTHENTICATION MIDDLEWARE =====
+const authenticateUser = (req, res, next) => {
+  const sessionId = req.headers['x-session-id'] || req.cookies?.sessionId;
+  if (sessionId && sessions.has(sessionId)) {
+    req.user = sessions.get(sessionId);
+    next();
+  } else {
+    res.status(401).json({ error: 'Authentication required' });
+  }
+};
+
+// Mock authentication endpoint for testing
+app.get('/api/me', (req, res) => {
+  // For testing purposes, return a mock driver user
+  // In production, implement proper session management
+  res.json({ 
+    id: 1, 
+    firstname: 'Test', 
+    lastname: 'Driver', 
+    role: 'Driver', 
+    username: 'testdriver' 
+  });
+});
+
+// ===== LOST & FOUND ENDPOINTS =====
+
+// GET all lost items
+app.get('/api/lost-items', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        id, 
+        lostitem, 
+        sacco_name, 
+        date, 
+        sacco, 
+        description, 
+        image_url, 
+        created_at 
+      FROM lost_items 
+      ORDER BY created_at DESC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching lost items:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// GET a single lost item by ID
+app.get('/api/lost-items/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(`
+      SELECT 
+        id, 
+        lostitem, 
+        sacco_name, 
+        date, 
+        sacco, 
+        description, 
+        image_url, 
+        created_at 
+      FROM lost_items 
+      WHERE id = $1
+    `, [id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Lost item not found' });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error fetching lost item:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// CREATE a new lost item report
+app.post('/api/lost-item', upload.single('image'), async (req, res) => {
+  try {
+    const { lostitem, sacco_name, date, sacco, description } = req.body;
+    
+    // Validate required fields
+    if (!lostitem || !sacco_name || !date || !sacco) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: lostitem, sacco name, date, and sacco are required' 
+      });
+    }
+    
+    // Get image URL if file was uploaded
+    let imageUrl = null;
+    if (req.file) {
+      imageUrl = `/uploads/${req.file.filename}`;
+    }
+    
+    // Insert into database
+    const result = await pool.query(`
+      INSERT INTO lost_items (lostitem, sacco_name, date, sacco, description, image_url, created_at) 
+      VALUES ($1, $2, $3, $4, $5, $6, NOW()) 
+      RETURNING *
+    `, [lostitem, sacco_name, date, sacco, description || null, imageUrl]);
+    
+    res.status(201).json({
+      message: 'Lost item reported successfully',
+      item: result.rows[0]
+    });
+  } catch (err) {
+    console.error('Error creating lost item report:', err);
+    // Delete uploaded file if database insert fails
+    if (req.file) {
+      fs.unlink(req.file.path, (unlinkErr) => {
+        if (unlinkErr) console.error('Error deleting file:', unlinkErr);
+      });
+    }
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// UPDATE lost item to mark as found
+app.post('/api/found-item/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Update description to indicate item was found
+    const result = await pool.query(`
+      UPDATE lost_items 
+      SET description = COALESCE(description || ' ', '') || '[FOUND] Item has been found' 
+      WHERE id = $1 
+      RETURNING *
+    `, [id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Lost item not found' });
+    }
+    
+    res.json({
+      message: 'Item marked as found successfully',
+      item: result.rows[0]
+    });
+  } catch (err) {
+    console.error('Error marking item as found:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// DELETE a lost item (admin function)
+app.delete('/api/lost-items/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Get the item first to delete associated image
+    const itemResult = await pool.query('SELECT image_url FROM lost_items WHERE id = $1', [id]);
+    
+    if (itemResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Lost item not found' });
+    }
+    
+    const imageUrl = itemResult.rows[0].image_url;
+    
+    // Delete from database
+    const result = await pool.query('DELETE FROM lost_items WHERE id = $1 RETURNING *', [id]);
+    
+    // Delete associated image file if it exists
+    if (imageUrl) {
+      const imagePath = path.join(__dirname, imageUrl);
+      fs.unlink(imagePath, (err) => {
+        if (err) console.error('Error deleting image file:', err);
+      });
+    }
+    
+    res.json({
+      message: 'Lost item deleted successfully',
+      item: result.rows[0]
+    });
+  } catch (err) {
+    console.error('Error deleting lost item:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
 
 // ===== EXISTING ENDPOINTS =====
 
@@ -364,8 +584,25 @@ app.get('/api/auth/check-email/:email', async (req, res) => {
   }
 });
 
+// Error handling middleware
+app.use((error, req, res, next) => {
+  if (error instanceof multer.MulterError) {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'File too large. Maximum size is 5MB.' });
+    }
+  }
+  
+  if (error.message === 'Only image files are allowed!') {
+    return res.status(400).json({ error: 'Only image files are allowed!' });
+  }
+  
+  console.error('Unhandled error:', error);
+  res.status(500).json({ error: 'Internal Server Error' });
+});
+
 // Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`CORS origin: ${process.env.CORS_ORIGIN || 'http://localhost:3000'}`);
 });

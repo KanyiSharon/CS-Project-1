@@ -92,7 +92,7 @@ export default function Login() {
           }
         }, 3000);
         
-        navigate('/welcome');
+        navigate('/home'); // Navigate to home page
       } else {
         const errorData = await res.json();
         

@@ -10,6 +10,8 @@ import NotFound from './pages/NotFound';
 import SignUp from './pages/SignUp';
 import Login from './pages/Login';
 import './App.css';
+import LostAndFound from './pages/lostandfound.js'; 
+
 
 function App() {
   const location = useLocation();
@@ -24,6 +26,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/signup" element={<SignUp />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/lostandfound" element={<LostAndFound />} />
         {/* <Route path="/search" element={<Search />} /> */}
         {/* <Route path="/map" element={<Map />} /> */}
         {/* <Route path="/weather" element={<Weather />} /> */}
