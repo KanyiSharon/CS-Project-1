@@ -75,16 +75,100 @@ app.get('/api/me', (req, res) => {
   });
 });
 
+// Test database connection endpoint
+app.get('/api/test-db', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT NOW()');
+    res.json({ 
+      message: 'Database connection successful', 
+      timestamp: result.rows[0].now 
+    });
+  } catch (err) {
+    console.error('Database connection test failed:', err);
+    res.status(500).json({ 
+      error: 'Database connection failed', 
+      details: err.message 
+    });
+  }
+});
+
+// Initialize lost_items table
+const initializeLostItemsTable = async () => {
+  try {
+    // Check if table exists first
+    const tableExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'lost_items'
+      );
+    `);
+
+    if (!tableExists.rows[0].exists) {
+      // Create the table only if it doesn't exist
+      await pool.query(`
+        CREATE TABLE lost_items (
+          id SERIAL PRIMARY KEY,
+          lostitem VARCHAR(255) NOT NULL,
+          route VARCHAR(255) NOT NULL,
+          date DATE NOT NULL,
+          sacco VARCHAR(255) NOT NULL,
+          description TEXT,
+          image_url VARCHAR(500),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      console.log('Lost items table created successfully');
+    } else {
+      console.log('Lost items table already exists');
+    }
+  } catch (err) {
+    console.error('Error initializing lost_items table:', err);
+  }
+};
+
+// Initialize table on startup
+initializeLostItemsTable();
+
 // ===== LOST & FOUND ENDPOINTS =====
 
 // GET all lost items
 app.get('/api/lost-items', async (req, res) => {
   try {
+    // Ensure table exists before querying
+    const tableExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'lost_items'
+      );
+    `);
+
+    if (!tableExists.rows[0].exists) {
+      // Create the table if it doesn't exist
+      await pool.query(`
+        CREATE TABLE lost_items (
+          id SERIAL PRIMARY KEY,
+          lostitem VARCHAR(255) NOT NULL,
+          route VARCHAR(255) NOT NULL,
+          date DATE NOT NULL,
+          sacco VARCHAR(255) NOT NULL,
+          description TEXT,
+          image_url VARCHAR(500),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      console.log('Created lost_items table');
+      // Return empty array since table was just created
+      return res.json([]);
+    }
+
+    // Query the table - make sure column names match exactly
     const result = await pool.query(`
       SELECT 
         id, 
         lostitem, 
-        sacco_name, 
+        route, 
         date, 
         sacco, 
         description, 
@@ -93,10 +177,14 @@ app.get('/api/lost-items', async (req, res) => {
       FROM lost_items 
       ORDER BY created_at DESC
     `);
+    
     res.json(result.rows);
   } catch (err) {
     console.error('Error fetching lost items:', err);
-    res.status(500).json({ error: 'Internal Server Error' });
+    res.status(500).json({ 
+      error: 'Internal Server Error', 
+      details: err.message 
+    });
   }
 });
 
@@ -104,11 +192,17 @@ app.get('/api/lost-items', async (req, res) => {
 app.get('/api/lost-items/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // Validate ID
+    if (!id || isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid item ID' });
+    }
+    
     const result = await pool.query(`
       SELECT 
         id, 
         lostitem, 
-        sacco_name, 
+        route, 
         date, 
         sacco, 
         description, 
@@ -125,19 +219,41 @@ app.get('/api/lost-items/:id', async (req, res) => {
     res.json(result.rows[0]);
   } catch (err) {
     console.error('Error fetching lost item:', err);
-    res.status(500).json({ error: 'Internal Server Error' });
+    res.status(500).json({ 
+      error: 'Internal Server Error', 
+      details: err.message 
+    });
   }
 });
 
 // CREATE a new lost item report
 app.post('/api/lost-item', upload.single('image'), async (req, res) => {
   try {
-    const { lostitem, sacco_name, date, sacco, description } = req.body;
+    const { lostitem, route, date, sacco, description } = req.body;
     
     // Validate required fields
-    if (!lostitem || !sacco_name || !date || !sacco) {
+    if (!lostitem || !route || !date || !sacco) {
+      // Clean up uploaded file if validation fails
+      if (req.file) {
+        fs.unlink(req.file.path, (unlinkErr) => {
+          if (unlinkErr) console.error('Error deleting file:', unlinkErr);
+        });
+      }
       return res.status(400).json({ 
-        error: 'Missing required fields: lostitem, sacco name, date, and sacco are required' 
+        error: 'Missing required fields: lostitem, route, date, and sacco are required' 
+      });
+    }
+    
+    // Validate date format
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(date)) {
+      if (req.file) {
+        fs.unlink(req.file.path, (unlinkErr) => {
+          if (unlinkErr) console.error('Error deleting file:', unlinkErr);
+        });
+      }
+      return res.status(400).json({ 
+        error: 'Invalid date format. Please use YYYY-MM-DD' 
       });
     }
     
@@ -149,10 +265,10 @@ app.post('/api/lost-item', upload.single('image'), async (req, res) => {
     
     // Insert into database
     const result = await pool.query(`
-      INSERT INTO lost_items (lostitem, sacco_name, date, sacco, description, image_url, created_at) 
+      INSERT INTO lost_items (lostitem, route, date, sacco, description, image_url, created_at) 
       VALUES ($1, $2, $3, $4, $5, $6, NOW()) 
       RETURNING *
-    `, [lostitem, sacco_name, date, sacco, description || null, imageUrl]);
+    `, [lostitem, route, date, sacco, description || null, imageUrl]);
     
     res.status(201).json({
       message: 'Lost item reported successfully',
@@ -160,13 +276,18 @@ app.post('/api/lost-item', upload.single('image'), async (req, res) => {
     });
   } catch (err) {
     console.error('Error creating lost item report:', err);
+    
     // Delete uploaded file if database insert fails
     if (req.file) {
       fs.unlink(req.file.path, (unlinkErr) => {
         if (unlinkErr) console.error('Error deleting file:', unlinkErr);
       });
     }
-    res.status(500).json({ error: 'Internal Server Error' });
+    
+    res.status(500).json({ 
+      error: 'Internal Server Error', 
+      details: err.message 
+    });
   }
 });
 
@@ -174,6 +295,11 @@ app.post('/api/lost-item', upload.single('image'), async (req, res) => {
 app.post('/api/found-item/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // Validate ID
+    if (!id || isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid item ID' });
+    }
     
     // Update description to indicate item was found
     const result = await pool.query(`
@@ -193,7 +319,10 @@ app.post('/api/found-item/:id', async (req, res) => {
     });
   } catch (err) {
     console.error('Error marking item as found:', err);
-    res.status(500).json({ error: 'Internal Server Error' });
+    res.status(500).json({ 
+      error: 'Internal Server Error', 
+      details: err.message 
+    });
   }
 });
 
@@ -201,6 +330,11 @@ app.post('/api/found-item/:id', async (req, res) => {
 app.delete('/api/lost-items/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // Validate ID
+    if (!id || isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid item ID' });
+    }
     
     // Get the item first to delete associated image
     const itemResult = await pool.query('SELECT image_url FROM lost_items WHERE id = $1', [id]);
@@ -218,7 +352,9 @@ app.delete('/api/lost-items/:id', async (req, res) => {
     if (imageUrl) {
       const imagePath = path.join(__dirname, imageUrl);
       fs.unlink(imagePath, (err) => {
-        if (err) console.error('Error deleting image file:', err);
+        if (err && err.code !== 'ENOENT') {
+          console.error('Error deleting image file:', err);
+        }
       });
     }
     
@@ -228,7 +364,10 @@ app.delete('/api/lost-items/:id', async (req, res) => {
     });
   } catch (err) {
     console.error('Error deleting lost item:', err);
-    res.status(500).json({ error: 'Internal Server Error' });
+    res.status(500).json({ 
+      error: 'Internal Server Error', 
+      details: err.message 
+    });
   }
 });
 
