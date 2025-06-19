@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle, Clock, MapPin, ChevronLeft, ChevronRight, Filter, X, Search, Info } from 'lucide-react';
+import { AlertTriangle, Clock, MapPin, ChevronLeft, ChevronRight, Filter, X, Search, Info, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const DriverAlertsDisplay = () => {
@@ -151,6 +151,33 @@ const DriverAlertsDisplay = () => {
 
   // CSS Styles
   const styles = {
+     fabButton: {
+      position: 'fixed',
+      bottom: '32px',
+      right: '32px',
+      width: '56px',
+      height: '56px',
+      borderRadius: '50%',
+      backgroundColor: '#00d4ff',
+      color: '#000',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      cursor: 'pointer',
+      boxShadow: '0 4px 16px rgba(0, 212, 255, 0.3)',
+      transition: 'all 0.3s ease',
+      zIndex: 100,
+      border: 'none'
+    },
+    fabButtonHover: {
+      transform: 'scale(1.1)',
+      boxShadow: '0 8px 24px rgba(0, 212, 255, 0.5)'
+    },
+    headerButtons: {
+      display: 'flex',
+      gap: '12px',
+      alignItems: 'center'
+    },
     container: {
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #1a0033 0%, #0f0f23 50%, #000000 100%)',
@@ -438,13 +465,17 @@ const DriverAlertsDisplay = () => {
 
   // Animation styles
   const animationStyles = `
-    @keyframes spin {
+    @ @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
     .alert-hover:hover {
       transform: translateY(-2px);
       box-shadow: 0 8px 16px rgba(0, 212, 255, 0.1);
+    }
+    .fab-hover:hover {
+      transform: scale(1.1);
+      box-shadow: 0 8px 24px rgba(0, 212, 255, 0.5);
     }
   `;
 
@@ -482,7 +513,15 @@ const DriverAlertsDisplay = () => {
           {showFilters ? 'Hide Filters' : 'Show Filters'}
         </button>
       </div>
-
+        {/* Add the FAB button */}
+            <button
+                style={styles.fabButton}
+                className="fab-hover"
+                onClick={() => navigate('/driveralertsform')}
+                title="Create New Alert"
+            >
+                <Plus size={24} />
+            </button>
       {error && (
         <div style={styles.error}>
           <AlertTriangle size={16} />

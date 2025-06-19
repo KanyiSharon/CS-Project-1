@@ -18,7 +18,7 @@ function Navbar() {
     { path: '/', label: 'Home', icon: Home },
     { path: '/lostandfound', label: 'Lost&Found', icon: Search },
     { path: '/ratingsdisplay', label: 'Ratings', icon: MapPin },
-    { path: '/driveralertsform', label: 'Driver Alert', icon: Cloud },
+    { path: '/driveralertsdisplay', label: 'Driver Alert', icon: Cloud },
   ];
 
   return (
