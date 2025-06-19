@@ -11,6 +11,7 @@ import SignUp from './pages/SignUp';
 import Login from './pages/Login';
 import './App.css';
 import LostAndFound from './pages/lostandfound.js'; 
+import DriverAlertsForm from './pages/DriverAlertsForm.js';
 
 
 function App() {
@@ -27,6 +28,8 @@ function App() {
         <Route path="/signup" element={<SignUp />} />
         <Route path="/login" element={<Login />} />
         <Route path="/lostandfound" element={<LostAndFound />} />
+        <Route path="/driveralertsform" element={<DriverAlertsForm />} />
+
         {/* <Route path="/search" element={<Search />} /> */}
         {/* <Route path="/map" element={<Map />} /> */}
         {/* <Route path="/weather" element={<Weather />} /> */}

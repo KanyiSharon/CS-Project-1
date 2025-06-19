@@ -28,7 +28,7 @@ const storage = multer.diskStorage({
 const upload = multer({ 
   storage: storage,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
+    fileSize: 10 * 1024 * 1024, // 5MB limit
   },
   fileFilter: function (req, file, cb) {
     // Check if the file is an image
@@ -720,6 +720,763 @@ app.get('/api/auth/check-email/:email', async (req, res) => {
   } catch (err) {
     console.error('Error checking email:', err);
     res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+// Add these endpoints to your existing server.js file
+
+// Initialize driver_alerts table
+const initializeDriverAlertsTable = async () => {
+  try {
+    // Check if table exists first
+    const tableExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'driver_alerts'
+      );
+    `);
+
+    if (!tableExists.rows[0].exists) {
+      // Create the table only if it doesn't exist
+      await pool.query(`
+        CREATE TABLE driver_alerts (
+          id SERIAL PRIMARY KEY,
+          driver_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          alert_type VARCHAR(50) NOT NULL CHECK (alert_type IN ('traffic_jam', 'accident', 'road_closure', 'weather_warning', 'police_checkpoint', 'route_diversion', 'other')),
+          title VARCHAR(255) NOT NULL,
+          description TEXT NOT NULL,
+          location_name VARCHAR(255) NOT NULL,
+          severity_level VARCHAR(20) NOT NULL DEFAULT 'medium' CHECK (severity_level IN ('low', 'medium', 'high', 'critical')),
+          image_data BYTEA,
+          image_filename VARCHAR(255),
+          image_mimetype VARCHAR(100),
+          expiry_time TIMESTAMP,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      // Create indexes for better performance
+      await pool.query(`
+        CREATE INDEX idx_driver_alerts_driver_id ON driver_alerts(driver_id);
+        CREATE INDEX idx_driver_alerts_alert_type ON driver_alerts(alert_type);
+        CREATE INDEX idx_driver_alerts_created_at ON driver_alerts(created_at DESC);
+        CREATE INDEX idx_driver_alerts_location ON driver_alerts(location_name);
+      `);
+
+      console.log('Driver alerts table created successfully with indexes');
+
+      // Insert sample data
+      await pool.query(`
+        INSERT INTO driver_alerts (driver_id, alert_type, title, description, location_name, severity_level) VALUES
+        (1, 'traffic_jam', 'Heavy Traffic on Uhuru Highway', 'Massive traffic jam from Nyayo Stadium to CBD. Consider alternative routes.', 'Uhuru Highway', 'high'),
+        (1, 'accident', 'Accident at Globe Roundabout', 'Multi-vehicle accident blocking two lanes. Police on scene.', 'Globe Roundabout', 'critical'),
+        (1, 'road_closure', 'Moi Avenue Closed', 'Road closure due to construction work. Use Tom Mboya Street instead.', 'Moi Avenue', 'medium')
+      `);
+
+      console.log('Sample driver alerts data inserted');
+    } else {
+      console.log('Driver alerts table already exists');
+    }
+  } catch (err) {
+    console.error('Error initializing driver_alerts table:', err);
+  }
+};
+
+// Add this to your existing initialization calls
+initializeDriverAlertsTable();
+
+// Configure multer for alert image uploads
+const alertImageStorage = multer.memoryStorage(); // Store in memory for database storage
+const uploadAlertImage = multer({
+  storage: alertImageStorage,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: function (req, file, cb) {
+    // Check if the file is an image
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
+
+// ===== DRIVER ALERTS ENDPOINTS =====
+
+// GET all driver alerts (with pagination and filtering)
+app.get('/api/driver-alerts', async (req, res) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 50, 
+      alert_type, 
+      severity_level, 
+      location, 
+      driver_id,
+      active_only = 'true' 
+    } = req.query;
+    
+    const offset = (page - 1) * limit;
+    let whereClause = [];
+    let queryParams = [];
+    let paramIndex = 1;
+
+    // Build WHERE clause based on filters
+    if (alert_type) {
+      whereClause.push(`alert_type = $${paramIndex}`);
+      queryParams.push(alert_type);
+      paramIndex++;
+    }
+
+    if (severity_level) {
+      whereClause.push(`severity_level = $${paramIndex}`);
+      queryParams.push(severity_level);
+      paramIndex++;
+    }
+
+    if (location) {
+      whereClause.push(`location_name ILIKE $${paramIndex}`);
+      queryParams.push(`%${location}%`);
+      paramIndex++;
+    }
+
+    if (driver_id) {
+      whereClause.push(`driver_id = $${paramIndex}`);
+      queryParams.push(driver_id);
+      paramIndex++;
+    }
+
+    // Filter out expired alerts if active_only is true
+    if (active_only === 'true') {
+      whereClause.push(`(expiry_time IS NULL OR expiry_time > NOW())`);
+    }
+
+    const whereString = whereClause.length > 0 ? `WHERE ${whereClause.join(' AND ')}` : '';
+
+    // Get alerts with driver information
+    const alertsQuery = `
+      SELECT 
+        da.id,
+        da.driver_id,
+        da.alert_type,
+        da.title,
+        da.description,
+        da.location_name,
+        da.severity_level,
+        da.image_filename,
+        da.image_mimetype,
+        da.expiry_time,
+        da.created_at,
+        u.firstname,
+        u.lastname,
+        u.username,
+        CASE 
+          WHEN da.image_data IS NOT NULL THEN true 
+          ELSE false 
+        END as has_image
+      FROM driver_alerts da
+      JOIN users u ON da.driver_id = u.id
+      ${whereString}
+      ORDER BY da.created_at DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+
+    queryParams.push(limit, offset);
+    const result = await pool.query(alertsQuery, queryParams);
+
+    // Get total count for pagination
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM driver_alerts da
+      JOIN users u ON da.driver_id = u.id
+      ${whereString}
+    `;
+    const countParams = queryParams.slice(0, -2); // Remove limit and offset
+    const countResult = await pool.query(countQuery, countParams);
+    const totalAlerts = parseInt(countResult.rows[0].total);
+
+    res.json({
+      alerts: result.rows,
+      pagination: {
+        current_page: parseInt(page),
+        total_pages: Math.ceil(totalAlerts / limit),
+        total_alerts: totalAlerts,
+        has_next: (page * limit) < totalAlerts,
+        has_prev: page > 1
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching driver alerts:', err);
+    res.status(500).json({ 
+      error: 'Internal Server Error', 
+      details: err.message 
+    });
+  }
+});
+
+// GET a single driver alert by ID
+app.get('/api/driver-alerts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Validate ID
+    if (!id || isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid alert ID' });
+    }
+    
+    const result = await pool.query(`
+      SELECT 
+        da.id,
+        da.driver_id,
+        da.alert_type,
+        da.title,
+        da.description,
+        da.location_name,
+        da.severity_level,
+        da.image_filename,
+        da.image_mimetype,
+        da.expiry_time,
+        da.created_at,
+        u.firstname,
+        u.lastname,
+        u.username,
+        CASE 
+          WHEN da.image_data IS NOT NULL THEN true 
+          ELSE false 
+        END as has_image
+      FROM driver_alerts da
+      JOIN users u ON da.driver_id = u.id
+      WHERE da.id = $1
+    `, [id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Alert not found' });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error fetching driver alert:', err);
+    res.status(500).json({ 
+      error: 'Internal Server Error', 
+      details: err.message 
+    });
+  }
+});
+
+// GET image for a specific alert
+app.get('/api/driver-alerts/:id/image', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Validate ID
+    if (!id || isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid alert ID' });
+    }
+    
+    const result = await pool.query(`
+      SELECT image_data, image_mimetype, image_filename
+      FROM driver_alerts 
+      WHERE id = $1 AND image_data IS NOT NULL
+    `, [id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+    
+    const { image_data, image_mimetype, image_filename } = result.rows[0];
+    
+    res.set({
+      'Content-Type': image_mimetype,
+      'Content-Disposition': `inline; filename="${image_filename}"`,
+      'Cache-Control': 'public, max-age=86400' // Cache for 1 day
+    });
+    
+    res.send(image_data);
+  } catch (err) {
+    console.error('Error fetching alert image:', err);
+    res.status(500).json({ 
+      error: 'Internal Server Error', 
+      details: err.message 
+    });
+  }
+});
+
+// CREATE a new driver alert
+app.post('/api/driver-alerts', uploadAlertImage.single('image'), async (req, res) => {
+  try {
+    const { 
+      driver_id, 
+      alert_type, 
+      title, 
+      description, 
+      location_name, 
+      severity_level = 'medium',
+      expiry_time 
+    } = req.body;
+    
+    // Validate required fields
+    if (!driver_id || !alert_type || !title || !description || !location_name) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: driver_id, alert_type, title, description, and location_name are required' 
+      });
+    }
+    
+    // Validate alert_type
+    const validAlertTypes = ['traffic_jam', 'accident', 'road_closure', 'weather_warning', 'police_checkpoint', 'route_diversion', 'other'];
+    if (!validAlertTypes.includes(alert_type)) {
+      return res.status(400).json({ 
+        error: 'Invalid alert_type. Must be one of: ' + validAlertTypes.join(', ') 
+      });
+    }
+    
+    // Validate severity_level
+    const validSeverityLevels = ['low', 'medium', 'high', 'critical'];
+    if (!validSeverityLevels.includes(severity_level)) {
+      return res.status(400).json({ 
+        error: 'Invalid severity_level. Must be one of: ' + validSeverityLevels.join(', ') 
+      });
+    }
+    
+    // Validate expiry_time format if provided
+    let expiryTimeValue = null;
+    if (expiry_time) {
+      expiryTimeValue = new Date(expiry_time);
+      if (isNaN(expiryTimeValue.getTime())) {
+        return res.status(400).json({ 
+          error: 'Invalid expiry_time format. Please use ISO 8601 format (YYYY-MM-DDTHH:mm:ss)' 
+        });
+      }
+      
+      // Check if expiry time is in the future
+      if (expiryTimeValue <= new Date()) {
+        return res.status(400).json({ 
+          error: 'Expiry time must be in the future' 
+        });
+      }
+    }
+    
+    // Verify driver exists
+    const driverExists = await pool.query('SELECT id FROM users WHERE id = $1', [driver_id]);
+    if (driverExists.rows.length === 0) {
+      return res.status(400).json({ error: 'Driver not found' });
+    }
+    
+    // Prepare image data
+    let imageData = null;
+    let imageFilename = null;
+    let imageMimetype = null;
+    
+    if (req.file) {
+      imageData = req.file.buffer;
+      imageFilename = req.file.originalname;
+      imageMimetype = req.file.mimetype;
+    }
+    
+    // Insert into database
+    const result = await pool.query(`
+      INSERT INTO driver_alerts (
+        driver_id, 
+        alert_type, 
+        title, 
+        description, 
+        location_name, 
+        severity_level, 
+        image_data, 
+        image_filename, 
+        image_mimetype, 
+        expiry_time,
+        created_at
+      ) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW()) 
+      RETURNING id, driver_id, alert_type, title, description, location_name, severity_level, image_filename, expiry_time, created_at
+    `, [
+      driver_id, 
+      alert_type, 
+      title, 
+      description, 
+      location_name, 
+      severity_level, 
+      imageData, 
+      imageFilename, 
+      imageMimetype, 
+      expiryTimeValue
+    ]);
+    
+    // Get driver information for response
+    const driverInfo = await pool.query(`
+      SELECT firstname, lastname, username FROM users WHERE id = $1
+    `, [driver_id]);
+    
+    const alertWithDriver = {
+      ...result.rows[0],
+      firstname: driverInfo.rows[0].firstname,
+      lastname: driverInfo.rows[0].lastname,
+      username: driverInfo.rows[0].username,
+      has_image: imageData !== null
+    };
+    
+    res.status(201).json({
+      message: 'Driver alert created successfully',
+      alert: alertWithDriver
+    });
+  } catch (err) {
+    console.error('Error creating driver alert:', err);
+    res.status(500).json({ 
+      error: 'Internal Server Error', 
+      details: err.message 
+    });
+  }
+});
+
+// UPDATE a driver alert (only by the original driver or admin)
+app.put('/api/driver-alerts/:id', uploadAlertImage.single('image'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { 
+      alert_type, 
+      title, 
+      description, 
+      location_name, 
+      severity_level,
+      expiry_time,
+      driver_id // for authorization check
+    } = req.body;
+    
+    // Validate ID
+    if (!id || isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid alert ID' });
+    }
+    
+    // Check if alert exists and get current data
+    const existingAlert = await pool.query(`
+      SELECT driver_id, image_data, image_filename, image_mimetype 
+      FROM driver_alerts 
+      WHERE id = $1
+    `, [id]);
+    
+    if (existingAlert.rows.length === 0) {
+      return res.status(404).json({ error: 'Alert not found' });
+    }
+    
+    // Authorization check - only the original driver can update
+    if (driver_id && existingAlert.rows[0].driver_id !== parseInt(driver_id)) {
+      return res.status(403).json({ error: 'You can only update your own alerts' });
+    }
+    
+    // Build update query dynamically
+    const updateFields = [];
+    const updateValues = [];
+    let paramIndex = 1;
+    
+    if (alert_type) {
+      const validAlertTypes = ['traffic_jam', 'accident', 'road_closure', 'weather_warning', 'police_checkpoint', 'route_diversion', 'other'];
+      if (!validAlertTypes.includes(alert_type)) {
+        return res.status(400).json({ 
+          error: 'Invalid alert_type. Must be one of: ' + validAlertTypes.join(', ') 
+        });
+      }
+      updateFields.push(`alert_type = $${paramIndex}`);
+      updateValues.push(alert_type);
+      paramIndex++;
+    }
+    
+    if (title) {
+      updateFields.push(`title = $${paramIndex}`);
+      updateValues.push(title);
+      paramIndex++;
+    }
+    
+    if (description) {
+      updateFields.push(`description = $${paramIndex}`);
+      updateValues.push(description);
+      paramIndex++;
+    }
+    
+    if (location_name) {
+      updateFields.push(`location_name = $${paramIndex}`);
+      updateValues.push(location_name);
+      paramIndex++;
+    }
+    
+    if (severity_level) {
+      const validSeverityLevels = ['low', 'medium', 'high', 'critical'];
+      if (!validSeverityLevels.includes(severity_level)) {
+        return res.status(400).json({ 
+          error: 'Invalid severity_level. Must be one of: ' + validSeverityLevels.join(', ') 
+        });
+      }
+      updateFields.push(`severity_level = $${paramIndex}`);
+      updateValues.push(severity_level);
+      paramIndex++;
+    }
+    
+    if (expiry_time !== undefined) {
+      let expiryTimeValue = null;
+      if (expiry_time) {
+        expiryTimeValue = new Date(expiry_time);
+        if (isNaN(expiryTimeValue.getTime())) {
+          return res.status(400).json({ 
+            error: 'Invalid expiry_time format. Please use ISO 8601 format (YYYY-MM-DDTHH:mm:ss)' 
+          });
+        }
+        
+        if (expiryTimeValue <= new Date()) {
+          return res.status(400).json({ 
+            error: 'Expiry time must be in the future' 
+          });
+        }
+      }
+      updateFields.push(`expiry_time = $${paramIndex}`);
+      updateValues.push(expiryTimeValue);
+      paramIndex++;
+    }
+    
+    // Handle image update
+    if (req.file) {
+      updateFields.push(`image_data = $${paramIndex}`);
+      updateValues.push(req.file.buffer);
+      paramIndex++;
+      
+      updateFields.push(`image_filename = $${paramIndex}`);
+      updateValues.push(req.file.originalname);
+      paramIndex++;
+      
+      updateFields.push(`image_mimetype = $${paramIndex}`);
+      updateValues.push(req.file.mimetype);
+      paramIndex++;
+    }
+    
+    if (updateFields.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+    
+    // Add ID parameter
+    updateValues.push(id);
+    
+    const updateQuery = `
+      UPDATE driver_alerts 
+      SET ${updateFields.join(', ')} 
+      WHERE id = $${paramIndex}
+      RETURNING id, driver_id, alert_type, title, description, location_name, severity_level, image_filename, expiry_time, created_at
+    `;
+    
+    const result = await pool.query(updateQuery, updateValues);
+    
+    // Get driver information for response
+    const driverInfo = await pool.query(`
+      SELECT firstname, lastname, username FROM users WHERE id = $1
+    `, [result.rows[0].driver_id]);
+    
+    const alertWithDriver = {
+      ...result.rows[0],
+      firstname: driverInfo.rows[0].firstname,
+      lastname: driverInfo.rows[0].lastname,
+      username: driverInfo.rows[0].username,
+      has_image: result.rows[0].image_filename !== null
+    };
+    
+    res.json({
+      message: 'Driver alert updated successfully',
+      alert: alertWithDriver
+    });
+  } catch (err) {
+    console.error('Error updating driver alert:', err);
+    res.status(500).json({ 
+      error: 'Internal Server Error', 
+      details: err.message 
+    });
+  }
+});
+
+// DELETE a driver alert (only by the original driver or admin)
+app.delete('/api/driver-alerts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { driver_id } = req.body; // for authorization check
+    
+    // Validate ID
+    if (!id || isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid alert ID' });
+    }
+    
+    // Check if alert exists
+    const existingAlert = await pool.query(`
+      SELECT driver_id FROM driver_alerts WHERE id = $1
+    `, [id]);
+    
+    if (existingAlert.rows.length === 0) {
+      return res.status(404).json({ error: 'Alert not found' });
+    }
+    
+    // Authorization check - only the original driver can delete
+    if (driver_id && existingAlert.rows[0].driver_id !== parseInt(driver_id)) {
+      return res.status(403).json({ error: 'You can only delete your own alerts' });
+    }
+    
+    // Delete the alert
+    const result = await pool.query(`
+      DELETE FROM driver_alerts 
+      WHERE id = $1 
+      RETURNING id, title, alert_type, created_at
+    `, [id]);
+    
+    res.json({
+      message: 'Driver alert deleted successfully',
+      alert: result.rows[0]
+    });
+  } catch (err) {
+    console.error('Error deleting driver alert:', err);
+    res.status(500).json({ 
+      error: 'Internal Server Error', 
+      details: err.message 
+    });
+  }
+});
+
+// GET alerts by location (for mobile app geolocation features)
+app.get('/api/driver-alerts/location/:location', async (req, res) => {
+  try {
+    const { location } = req.params;
+    const { radius = 10, active_only = 'true' } = req.query; // radius in km for future coordinate-based search
+    
+    let whereClause = `location_name ILIKE $1`;
+    let queryParams = [`%${location}%`];
+    
+    // Filter out expired alerts if active_only is true
+    if (active_only === 'true') {
+      whereClause += ` AND (expiry_time IS NULL OR expiry_time > NOW())`;
+    }
+    
+    const result = await pool.query(`
+      SELECT 
+        da.id,
+        da.driver_id,
+        da.alert_type,
+        da.title,
+        da.description,
+        da.location_name,
+        da.severity_level,
+        da.image_filename,
+        da.expiry_time,
+        da.created_at,
+        u.firstname,
+        u.lastname,
+        u.username,
+        CASE 
+          WHEN da.image_data IS NOT NULL THEN true 
+          ELSE false 
+        END as has_image
+      FROM driver_alerts da
+      JOIN users u ON da.driver_id = u.id
+      WHERE ${whereClause}
+      ORDER BY da.created_at DESC
+      LIMIT 100
+    `, queryParams);
+    
+    res.json({
+      location: location,
+      alerts: result.rows,
+      count: result.rows.length
+    });
+  } catch (err) {
+    console.error('Error fetching alerts by location:', err);
+    res.status(500).json({ 
+      error: 'Internal Server Error', 
+      details: err.message 
+    });
+  }
+});
+
+// GET alert statistics (for dashboard)
+app.get('/api/driver-alerts/stats', async (req, res) => {
+  try {
+    const { period = '7d' } = req.query; // 1d, 7d, 30d, 90d
+    
+    let dateFilter = '';
+    switch (period) {
+      case '1d':
+        dateFilter = "created_at >= NOW() - INTERVAL '1 day'";
+        break;
+      case '7d':
+        dateFilter = "created_at >= NOW() - INTERVAL '7 days'";
+        break;
+      case '30d':
+        dateFilter = "created_at >= NOW() - INTERVAL '30 days'";
+        break;
+      case '90d':
+        dateFilter = "created_at >= NOW() - INTERVAL '90 days'";
+        break;
+      default:
+        dateFilter = "created_at >= NOW() - INTERVAL '7 days'";
+    }
+    
+    // Get total alerts
+    const totalResult = await pool.query(`
+      SELECT COUNT(*) as total FROM driver_alerts WHERE ${dateFilter}
+    `);
+    
+    // Get alerts by type
+    const typeResult = await pool.query(`
+      SELECT alert_type, COUNT(*) as count 
+      FROM driver_alerts 
+      WHERE ${dateFilter}
+      GROUP BY alert_type 
+      ORDER BY count DESC
+    `);
+    
+    // Get alerts by severity
+    const severityResult = await pool.query(`
+      SELECT severity_level, COUNT(*) as count 
+      FROM driver_alerts 
+      WHERE ${dateFilter}
+      GROUP BY severity_level 
+      ORDER BY count DESC
+    `);
+    
+    // Get active alerts (not expired)
+    const activeResult = await pool.query(`
+      SELECT COUNT(*) as active 
+      FROM driver_alerts 
+      WHERE ${dateFilter} AND (expiry_time IS NULL OR expiry_time > NOW())
+    `);
+    
+    res.json({
+      period: period,
+      total_alerts: parseInt(totalResult.rows[0].total),
+      active_alerts: parseInt(activeResult.rows[0].active),
+      by_type: typeResult.rows,
+      by_severity: severityResult.rows
+    });
+  } catch (err) {
+    console.error('Error fetching alert statistics:', err);
+    res.status(500).json({ 
+      error: 'Internal Server Error', 
+      details: err.message 
+    });
+  }
+});
+
+// Clean up expired alerts (can be called by a cron job)
+app.post('/api/driver-alerts/cleanup', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      DELETE FROM driver_alerts 
+      WHERE expiry_time IS NOT NULL AND expiry_time <= NOW()
+      RETURNING id, title, expiry_time
+    `);
+    
+    res.json({
+      message: 'Expired alerts cleaned up successfully',
+      deleted_count: result.rows.length,
+      deleted_alerts: result.rows
+    });
+  } catch (err) {
+    console.error('Error cleaning up expired alerts:', err);
+    res.status(500).json({ 
+      error: 'Internal Server Error', 
+      details: err.message 
+    });
   }
 });
 
