@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle, Camera, Send, X, MapPin } from 'lucide-react';
+import { AlertTriangle, Camera, Send, X, MapPin, CheckCircle } from 'lucide-react';
 
 const DriverAlertsForm = () => {
   // TODO: Replace with actual authentication context
@@ -96,20 +96,93 @@ const DriverAlertsForm = () => {
     setImagePreview(null);
   };
 
-  const convertImageToBase64 = (file) => {
+  // Mock API function to simulate backend submission
+  const mockApiSubmission = async (formData) => {
     return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        // Remove the data:image/jpeg;base64, prefix to get just the base64 data
-        const base64Data = reader.result.split(',')[1];
-        resolve(base64Data);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
+      setTimeout(() => {
+        // Simulate random success/failure for demo purposes
+        // In reality, this would always succeed or fail based on actual conditions
+        const success = Math.random() > 0.1; // 90% success rate for demo
+        
+        if (success) {
+          resolve({
+            success: true,
+            message: 'Alert submitted successfully! It will be reviewed by administrators before being published.',
+            alertId: 'ALERT-' + Date.now()
+          });
+        } else {
+          reject(new Error('Server temporarily unavailable. Please try again.'));
+        }
+      }, 2000); // Simulate 2 second delay
     });
   };
 
-  const handleSubmit = async () => {
+  const resetForm = () => {
+    setFormData({
+      alert_type: '',
+      title: '',
+      description: '',
+      location_name: '',
+      severity_level: 'medium',
+      image: null,
+      image_filename: '',
+      image_mimetype: '',
+      expiry_time: '',
+      poster_name: ''
+    });
+    setImagePreview(null);
+  };
+
+  // const handleSubmit = async () => {
+  //   // Basic validation
+  //   if (!formData.alert_type || !formData.title || !formData.description || !formData.location_name || !formData.poster_name) {
+  //     setErrorMessage('Please fill in all required fields including your name.');
+  //     return;
+  //   }
+
+  //   setIsSubmitting(true);
+  //   setErrorMessage('');
+  //   setSuccessMessage('');
+
+  //   try {
+  //     // Prepare data for submission
+  //     const submissionData = {
+  //       alert_type: formData.alert_type,
+  //       title: formData.title,
+  //       description: formData.description,
+  //       location_name: formData.location_name,
+  //       severity_level: formData.severity_level,
+  //       expiry_time: formData.expiry_time || null,
+  //       poster_name: formData.poster_name,
+  //       image_filename: formData.image_filename,
+  //       image_mimetype: formData.image_mimetype,
+  //       submitted_at: new Date().toISOString(),
+  //       status: 'pending_review'
+  //     };
+
+  //     // For now, use mock API - replace this with actual API call
+  //     const result = await mockApiSubmission(submissionData);
+      
+  //     // Success handling
+  //     setSuccessMessage(result.message);
+  //     setIsSubmitting(false);
+      
+  //     // Reset form after successful submission
+  //     resetForm();
+      
+  //     // Scroll to top to show success message
+  //     window.scrollTo({ top: 0, behavior: 'smooth' });
+      
+  //   } catch (error) {
+  //     console.error('Submission error:', error);
+  //     setIsSubmitting(false);
+  //     setErrorMessage(error.message || 'Failed to submit alert. Please try again.');
+  //   }
+  // };
+
+  // Real API submission function (commented out for now)
+  
+  const handleSubmit= async () => {
     // Basic validation
     if (!formData.alert_type || !formData.title || !formData.description || !formData.location_name || !formData.poster_name) {
       setErrorMessage('Please fill in all required fields including your name.');
@@ -118,76 +191,43 @@ const DriverAlertsForm = () => {
 
     setIsSubmitting(true);
     setErrorMessage('');
-    
-    try {
-      // Prepare submission data
-      const submitData = {
-        // TODO: When authentication is implemented, use actual user ID
-        // driver_id: currentUser.id,
-        driver_id: null, // Will be set by backend based on authenticated user
-        alert_type: formData.alert_type,
-        title: formData.title,
-        description: formData.description,
-        location_name: formData.location_name,
-        severity_level: formData.severity_level,
-        expiry_time: formData.expiry_time || null,
-        image_filename: formData.image_filename || null,
-        image_mimetype: formData.image_mimetype || null,
-        poster_name: formData.poster_name // Temporary field until auth is implemented
-      };
 
-      // Convert image to base64 if present
+    try {
+      // Prepare FormData for multipart/form-data
+      const form = new FormData();
+      form.append('alert_type', formData.alert_type);
+      form.append('title', formData.title);
+      form.append('description', formData.description);
+      form.append('location_name', formData.location_name);
+      form.append('severity_level', formData.severity_level);
+      if (formData.expiry_time) form.append('expiry_time', formData.expiry_time);
+      form.append('poster_name', formData.poster_name);
       if (formData.image) {
-        const imageBase64 = await convertImageToBase64(formData.image);
-        submitData.image_data = imageBase64;
+        form.append('image', formData.image, formData.image_filename);
       }
-      
-      console.log('Submitting alert:', submitData);
-      
-      // Simulate API call - replace with actual API endpoint
+
       const response = await fetch('/api/driver-alerts', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        //   'Authorization': `Bearer ${userToken}` // Add your auth token
-        },
-        body: JSON.stringify(submitData)
+        body: form
       });
-      
+
       if (!response.ok) {
-        throw new Error('Failed to submit alert');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to submit alert');
       }
-      
-      // Simulate successful submission
-      setTimeout(() => {
-        setIsSubmitting(false);
-        setSuccessMessage('Alert submitted successfully! Your traffic alert has been posted and is under review.');
-        
-        // Reset form
-        setFormData({
-          alert_type: '',
-          title: '',
-          description: '',
-          location_name: '',
-          severity_level: 'medium',
-          image: null,
-          image_filename: '',
-          image_mimetype: '',
-          expiry_time: '',
-          poster_name: ''
-        });
-        setImagePreview(null);
-        
-        // Clear success message after 5 seconds
-        setTimeout(() => setSuccessMessage(''), 5000);
-      }, 2000);
+
+      const result = await response.json();
+      setSuccessMessage(result.message || 'Alert submitted successfully!');
+      setIsSubmitting(false);
+      resetForm();
       
     } catch (error) {
       console.error('Submission error:', error);
       setIsSubmitting(false);
-      setErrorMessage('Failed to submit alert. Please try again.');
+      setErrorMessage(error.message || 'Failed to submit alert. Please try again.');
     }
   };
+  
 
   return (
     <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow-lg">
@@ -207,13 +247,19 @@ const DriverAlertsForm = () => {
 
       {successMessage && (
         <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-          <p className="text-green-700">{successMessage}</p>
+          <div className="flex items-center">
+            <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
+            <p className="text-green-700">{successMessage}</p>
+          </div>
         </div>
       )}
 
       {errorMessage && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-red-700">{errorMessage}</p>
+          <div className="flex items-center">
+            <AlertTriangle className="h-5 w-5 text-red-500 mr-2" />
+            <p className="text-red-700">{errorMessage}</p>
+          </div>
         </div>
       )}
 
@@ -235,6 +281,7 @@ const DriverAlertsForm = () => {
           />
           <p className="text-xs text-gray-500 mt-1">This will be replaced with automatic user identification once authentication is implemented</p>
         </div>
+
         {/* Alert Type */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -429,6 +476,7 @@ const DriverAlertsForm = () => {
               <li>Include photos when possible to help verify the situation</li>
               <li>Images are stored securely and will be used only for alert verification</li>
               <li>Name field is temporary - will be replaced with automatic user identification</li>
+              <li>Currently using mock API for demo - replace with real backend when ready</li>
             </ul>
           </div>
         </div>

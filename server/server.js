@@ -1006,7 +1006,7 @@ app.get('/api/driver-alerts/:id/image', async (req, res) => {
 app.post('/api/driver-alerts', uploadAlertImage.single('image'), async (req, res) => {
   try {
     const { 
-      driver_id, 
+      // driver_id, 
       alert_type, 
       title, 
       description, 
@@ -1015,8 +1015,11 @@ app.post('/api/driver-alerts', uploadAlertImage.single('image'), async (req, res
       expiry_time 
     } = req.body;
     
+    // HARDCODE DRIVER ID HERE - Change this value as needed
+    const driver_id = 1; // <-- This is where you hardcode the driver ID
+    
     // Validate required fields
-    if (!driver_id || !alert_type || !title || !description || !location_name) {
+    if (!alert_type || !title || !description || !location_name) {
       return res.status(400).json({ 
         error: 'Missing required fields: driver_id, alert_type, title, description, and location_name are required' 
       });
