@@ -1482,6 +1482,292 @@ app.post('/api/driver-alerts/cleanup', async (req, res) => {
     });
   }
 });
+// ===== RATINGS ENDPOINTS =====
+
+// Initialize ratings table
+const initializeRatingsTable = async () => {
+  try {
+    const tableExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'ratings'
+      );
+    `);
+
+    if (!tableExists.rows[0].exists) {
+      await pool.query(`
+        CREATE TABLE ratings (
+          id SERIAL PRIMARY KEY,
+          commuter_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          sacco_id INTEGER REFERENCES saccos(sacco_id) ON DELETE CASCADE,
+          cleanliness_rating INTEGER CHECK (cleanliness_rating BETWEEN 1 AND 5),
+          safety_rating INTEGER CHECK (safety_rating BETWEEN 1 AND 5),
+          service_rating INTEGER CHECK (service_rating BETWEEN 1 AND 5),
+          average_rating DECIMAL(3,2) GENERATED ALWAYS AS (
+            (cleanliness_rating + safety_rating + service_rating)::DECIMAL / 3
+          ) STORED,
+          review_text TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      console.log('Ratings table created successfully');
+    }
+  } catch (err) {
+    console.error('Error initializing ratings table:', err);
+  }
+};
+
+// Call this during startup
+initializeRatingsTable();
+
+// GET all ratings
+app.get('/api/ratings', async (req, res) => {
+  try {
+    const { sacco_id, commuter_id, sort = 'newest', page = 1, limit = 10 } = req.query;
+    
+    let whereClauses = [];
+    let queryParams = [];
+    let paramIndex = 1;
+
+    if (sacco_id) {
+      whereClauses.push(`r.sacco_id = $${paramIndex}`);
+      queryParams.push(sacco_id);
+      paramIndex++;
+    }
+
+    if (commuter_id) {
+      whereClauses.push(`r.commuter_id = $${paramIndex}`);
+      queryParams.push(commuter_id);
+      paramIndex++;
+    }
+
+    const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    // Determine sort order
+    let orderBy;
+    switch (sort) {
+      case 'highest':
+        orderBy = 'r.average_rating DESC';
+        break;
+      case 'lowest':
+        orderBy = 'r.average_rating ASC';
+        break;
+      case 'newest':
+      default:
+        orderBy = 'r.created_at DESC';
+    }
+
+    // Get paginated results
+    const offset = (page - 1) * limit;
+    const result = await pool.query(`
+      SELECT 
+        r.*,
+        u.firstname AS commuter_firstname,
+        u.lastname AS commuter_lastname,
+        s.name AS sacco_name
+      FROM ratings r
+      JOIN users u ON r.commuter_id = u.id
+      JOIN saccos s ON r.sacco_id = s.sacco_id
+      ${whereClause}
+      ORDER BY ${orderBy}
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `, [...queryParams, limit, offset]);
+
+    // Get total count for pagination
+    const countResult = await pool.query(`
+      SELECT COUNT(*) FROM ratings r
+      ${whereClause}
+    `, queryParams);
+    const total = parseInt(countResult.rows[0].count);
+
+    res.json({
+      ratings: result.rows,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(total / limit),
+        totalRatings: total,
+        hasNext: (page * limit) < total,
+        hasPrev: page > 1
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching ratings:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// GET average ratings for a sacco
+app.get('/api/ratings/average/:sacco_id', async (req, res) => {
+  try {
+    const { sacco_id } = req.params;
+    
+    const result = await pool.query(`
+      SELECT 
+        AVG(cleanliness_rating) AS avg_cleanliness,
+        AVG(safety_rating) AS avg_safety,
+        AVG(service_rating) AS avg_service,
+        AVG(average_rating) AS overall_avg,
+        COUNT(*) AS total_ratings
+      FROM ratings
+      WHERE sacco_id = $1
+    `, [sacco_id]);
+
+    if (result.rows[0].total_ratings === '0') {
+      return res.status(404).json({ error: 'No ratings found for this sacco' });
+    }
+
+    res.json({
+      sacco_id,
+      avg_cleanliness: parseFloat(result.rows[0].avg_cleanliness).toFixed(1),
+      avg_safety: parseFloat(result.rows[0].avg_safety).toFixed(1),
+      avg_service: parseFloat(result.rows[0].avg_service).toFixed(1),
+      overall_avg: parseFloat(result.rows[0].overall_avg).toFixed(1),
+      total_ratings: parseInt(result.rows[0].total_ratings)
+    });
+  } catch (err) {
+    console.error('Error fetching average ratings:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// POST a new rating
+app.post('/api/ratings', async (req, res) => {
+  try {
+    const { commuter_id, sacco_id, cleanliness_rating, safety_rating, service_rating, review_text } = req.body;
+
+    // Validate required fields
+    if (!commuter_id || !sacco_id || !cleanliness_rating || !safety_rating || !service_rating) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Validate rating values
+    const validateRating = (rating) => rating >= 1 && rating <= 5;
+    if (!validateRating(cleanliness_rating) || !validateRating(safety_rating) || !validateRating(service_rating)) {
+      return res.status(400).json({ error: 'Ratings must be between 1 and 5' });
+    }
+
+    // Check if user has already rated this sacco
+    const existingRating = await pool.query(`
+      SELECT id FROM ratings 
+      WHERE commuter_id = $1 AND sacco_id = $2
+    `, [commuter_id, sacco_id]);
+
+    if (existingRating.rows.length > 0) {
+      return res.status(400).json({ error: 'You have already rated this sacco' });
+    }
+
+    // Insert new rating
+    const result = await pool.query(`
+      INSERT INTO ratings (
+        commuter_id, 
+        sacco_id, 
+        cleanliness_rating, 
+        safety_rating, 
+        service_rating, 
+        review_text
+      ) 
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING *
+    `, [commuter_id, sacco_id, cleanliness_rating, safety_rating, service_rating, review_text || null]);
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('Error creating rating:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// PUT update a rating
+app.put('/api/ratings/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { cleanliness_rating, safety_rating, service_rating, review_text } = req.body;
+
+    // Validate rating values if provided
+    const validateRating = (rating) => rating === undefined || (rating >= 1 && rating <= 5);
+    if (!validateRating(cleanliness_rating) || !validateRating(safety_rating) || !validateRating(service_rating)) {
+      return res.status(400).json({ error: 'Ratings must be between 1 and 5' });
+    }
+
+    // Build update query dynamically
+    const updates = [];
+    const values = [];
+    let paramIndex = 1;
+
+    if (cleanliness_rating !== undefined) {
+      updates.push(`cleanliness_rating = $${paramIndex}`);
+      values.push(cleanliness_rating);
+      paramIndex++;
+    }
+
+    if (safety_rating !== undefined) {
+      updates.push(`safety_rating = $${paramIndex}`);
+      values.push(safety_rating);
+      paramIndex++;
+    }
+
+    if (service_rating !== undefined) {
+      updates.push(`service_rating = $${paramIndex}`);
+      values.push(service_rating);
+      paramIndex++;
+    }
+
+    if (review_text !== undefined) {
+      updates.push(`review_text = $${paramIndex}`);
+      values.push(review_text);
+      paramIndex++;
+    }
+
+    // Always update the updated_at timestamp
+    updates.push(`updated_at = NOW()`);
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    values.push(id);
+
+    const result = await pool.query(`
+      UPDATE ratings
+      SET ${updates.join(', ')}
+      WHERE id = $${paramIndex}
+      RETURNING *
+    `, values);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Rating not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error updating rating:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// DELETE a rating
+app.delete('/api/ratings/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(`
+      DELETE FROM ratings 
+      WHERE id = $1
+      RETURNING *
+    `, [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Rating not found' });
+    }
+
+    res.json({ message: 'Rating deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting rating:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
 
 // Error handling middleware
 app.use((error, req, res, next) => {
