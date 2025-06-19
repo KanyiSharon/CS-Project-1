@@ -134,8 +134,17 @@ const RatingForm = () => {
   const StarRating = ({ rating, onRatingChange, label, error }) => {
     return (
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700">
-          {label} <span className="text-red-500">*</span>
+        <label 
+          className="block text-sm font-medium"
+          style={{ 
+            color: '#00d4ff', 
+            fontFamily: 'Monaco, monospace',
+            textTransform: 'uppercase',
+            fontSize: '0.8rem',
+            letterSpacing: '1px'
+          }}
+        >
+          {label} <span style={{ color: '#ff4444' }}>*</span>
         </label>
         <div className="flex space-x-1">
           {[1, 2, 3, 4, 5].map((star) => (
@@ -143,150 +152,350 @@ const RatingForm = () => {
               key={star}
               type="button"
               onClick={() => onRatingChange(star)}
-              className={`p-1 rounded-full transition-colors ${
-                star <= rating
-                  ? 'text-yellow-400 hover:text-yellow-500'
-                  : 'text-gray-300 hover:text-gray-400'
-              }`}
+              className="p-2 rounded-full transition-all duration-300 hover:scale-110"
+              style={{
+                backgroundColor: star <= rating ? 'rgba(255, 215, 0, 0.1)' : 'rgba(0, 0, 0, 0.2)',
+                border: `1px solid ${star <= rating ? 'rgba(255, 215, 0, 0.3)' : 'rgba(0, 212, 255, 0.2)'}`,
+                backdropFilter: 'blur(8px)',
+                boxShadow: star <= rating ? '0 4px 16px rgba(255, 215, 0, 0.3)' : '0 4px 16px rgba(0, 212, 255, 0.1)'
+              }}
             >
               <Star
                 size={24}
-                fill={star <= rating ? 'currentColor' : 'none'}
+                fill={star <= rating ? '#ffd700' : 'none'}
+                style={{ 
+                  color: star <= rating ? '#ffd700' : '#666',
+                  filter: star <= rating ? 'drop-shadow(0 0 8px rgba(255, 215, 0, 0.5))' : 'none'
+                }}
               />
             </button>
           ))}
         </div>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && (
+          <p 
+            className="text-sm"
+            style={{ 
+              color: '#ff4444', 
+              fontFamily: 'Monaco, monospace',
+              fontSize: '0.7rem'
+            }}
+          >
+            {error}
+          </p>
+        )}
       </div>
     );
   };
 
+  // CSS Styles
+  const styles = {
+    container: {
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #1a0033 0%, #0f0f23 50%, #000000 100%)',
+      position: 'relative',
+      overflow: 'hidden',
+      padding: '24px 16px'
+    },
+    gridOverlay: {
+      position: 'absolute',
+      inset: 0,
+      backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0h100v1H0zM0 0v100h1V0z' fill='%2300d4ff' fill-opacity='0.1'/%3E%3C/svg%3E")`,
+      animation: 'pulse 3s infinite'
+    },
+    particle: {
+      position: 'absolute',
+      width: '4px',
+      height: '4px',
+      backgroundColor: '#00d4ff',
+      borderRadius: '50%',
+      animation: 'pulse 3s infinite'
+    },
+    formCard: {
+      maxWidth: '800px',
+      margin: '0 auto',
+      backdropFilter: 'blur(16px)',
+      backgroundColor: 'rgba(0, 0, 0, 0.2)',
+      border: '1px solid rgba(0, 212, 255, 0.3)',
+      borderRadius: '16px',
+      padding: '32px',
+      boxShadow: '0 8px 32px rgba(0, 212, 255, 0.1)',
+      position: 'relative',
+      zIndex: 10
+    },
+    title: {
+      fontSize: '2rem',
+      fontWeight: 'bold',
+      fontFamily: 'Monaco, monospace',
+      background: 'linear-gradient(45deg, #00d4ff, #39ff14, #ff1493)',
+      WebkitBackgroundClip: 'text',
+      WebkitTextFillColor: 'transparent',
+      backgroundClip: 'text',
+      textTransform: 'uppercase',
+      letterSpacing: '2px',
+      marginBottom: '8px'
+    },
+    subtitle: {
+      color: 'rgba(224, 247, 255, 0.7)',
+      fontSize: '0.9rem',
+      fontFamily: 'Monaco, monospace'
+    },
+    input: {
+      width: '100%',
+      padding: '12px 16px',
+      backgroundColor: 'rgba(0, 0, 0, 0.3)',
+      border: '1px solid rgba(0, 212, 255, 0.3)',
+      borderRadius: '8px',
+      color: '#e0f7ff',
+      backdropFilter: 'blur(8px)',
+      boxShadow: '0 4px 16px rgba(0, 212, 255, 0.1)',
+      outline: 'none',
+      transition: 'all 0.3s ease',
+      fontFamily: 'Monaco, monospace',
+      fontSize: '0.9rem'
+    },
+    inputError: {
+      borderColor: 'rgba(255, 68, 68, 0.5)',
+      boxShadow: '0 4px 16px rgba(255, 68, 68, 0.2)'
+    },
+    label: {
+      display: 'block',
+      fontSize: '0.8rem',
+      fontWeight: '500',
+      color: '#00d4ff',
+      marginBottom: '8px',
+      fontFamily: 'Monaco, monospace',
+      textTransform: 'uppercase',
+      letterSpacing: '1px'
+    },
+    errorText: {
+      marginTop: '4px',
+      fontSize: '0.7rem',
+      color: '#ff4444',
+      fontFamily: 'Monaco, monospace'
+    },
+    button: {
+      display: 'inline-flex',
+      alignItems: 'center',
+      padding: '16px 32px',
+      background: 'linear-gradient(45deg, #00d4ff, #39ff14)',
+      color: '#000',
+      border: 'none',
+      borderRadius: '8px',
+      fontWeight: 'bold',
+      fontFamily: 'Monaco, monospace',
+      textTransform: 'uppercase',
+      letterSpacing: '1px',
+      cursor: 'pointer',
+      transition: 'all 0.3s ease',
+      boxShadow: '0 8px 32px rgba(0, 212, 255, 0.3)',
+      fontSize: '0.9rem'
+    },
+    buttonDisabled: {
+      background: 'rgba(102, 102, 102, 0.3)',
+      color: 'rgba(224, 247, 255, 0.5)',
+      cursor: 'not-allowed',
+      boxShadow: '0 4px 16px rgba(102, 102, 102, 0.2)'
+    },
+    statusCard: {
+      padding: '16px',
+      borderRadius: '8px',
+      backdropFilter: 'blur(8px)',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      marginBottom: '24px',
+      fontFamily: 'Monaco, monospace',
+      fontSize: '0.8rem'
+    },
+    successCard: {
+      backgroundColor: 'rgba(57, 255, 20, 0.1)',
+      border: '1px solid rgba(57, 255, 20, 0.3)',
+      color: '#39ff14',
+      boxShadow: '0 4px 16px rgba(57, 255, 20, 0.2)'
+    },
+    errorCard: {
+      backgroundColor: 'rgba(255, 68, 68, 0.1)',  
+      border: '1px solid rgba(255, 68, 68, 0.3)',
+      color: '#ff4444',
+      boxShadow: '0 4px 16px rgba(255, 68, 68, 0.2)'
+    },
+    spinner: {
+      width: '16px',
+      height: '16px',
+      border: '2px solid rgba(0, 0, 0, 0.3)',
+      borderTop: '2px solid #000',
+      borderRadius: '50%',
+      animation: 'spin 1s linear infinite',
+      marginRight: '8px'
+    }
+  };
+
+  // Animation styles
+  const animationStyles = `
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .input-focus:focus {
+      border-color: #00d4ff !important;
+      box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.2) !important;
+    }
+    .button-hover:hover:not(:disabled) {
+      transform: scale(1.05);
+      box-shadow: 0 12px 48px rgba(0, 212, 255, 0.5) !important;
+    }
+  `;
+
   return (
-    <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow-lg">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Rate Your Sacco Experience</h2>
-        <p className="text-gray-600">Share your feedback to help improve public transport services</p>
-      </div>
+    <div style={styles.container}>
+      <style>{animationStyles}</style>
+      <div style={styles.gridOverlay}></div>
+      
+      {/* Floating Particles */}
+      {[...Array(20)].map((_, i) => (
+        <div
+          key={i}
+          style={{
+            ...styles.particle,
+            left: `${Math.random() * 100}%`,
+            top: `${Math.random() * 100}%`,
+            animationDelay: `${Math.random() * 3}s`,
+            animationDuration: `${3 + Math.random() * 2}s`
+          }}
+        />
+      ))}
 
-      {submitStatus && (
-        <div className={`mb-6 p-4 rounded-md flex items-center space-x-3 ${
-          submitStatus.type === 'success' 
-            ? 'bg-green-50 text-green-800 border border-green-200' 
-            : 'bg-red-50 text-red-800 border border-red-200'
-        }`}>
-          {submitStatus.type === 'success' ? (
-            <CheckCircle size={20} />
-          ) : (
-            <AlertCircle size={20} />
-          )}
-          <span>{submitStatus.message}</span>
+      <div style={styles.formCard}>
+        <div className="mb-6">
+          <h2 style={styles.title}>Rate Your Sacco Experience</h2>
+          <p style={styles.subtitle}>Share your feedback to help improve public transport services</p>
         </div>
-      )}
 
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label htmlFor="commuter_id" className="block text-sm font-medium text-gray-700 mb-2">
-              Commuter ID <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="number"
-              id="commuter_id"
-              name="commuter_id"
-              value={formData.commuter_id}
-              onChange={handleInputChange}
-              className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                errors.commuter_id ? 'border-red-300' : 'border-gray-300'
-              }`}
-              placeholder="Enter your commuter ID"
-            />
-            {errors.commuter_id && (
-              <p className="mt-1 text-sm text-red-600">{errors.commuter_id}</p>
+        {submitStatus && (
+          <div style={{
+            ...styles.statusCard,
+            ...(submitStatus.type === 'success' ? styles.successCard : styles.errorCard)
+          }}>
+            {submitStatus.type === 'success' ? (
+              <CheckCircle size={20} />
+            ) : (
+              <AlertCircle size={20} />
             )}
+            <span>{submitStatus.message}</span>
           </div>
-
-          <div>
-            <label htmlFor="sacco_id" className="block text-sm font-medium text-gray-700 mb-2">
-              Sacco ID <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="number"
-              id="sacco_id"
-              name="sacco_id"
-              value={formData.sacco_id}
-              onChange={handleInputChange}
-              className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                errors.sacco_id ? 'border-red-300' : 'border-gray-300'
-              }`}
-              placeholder="Enter sacco ID"
-            />
-            {errors.sacco_id && (
-              <p className="mt-1 text-sm text-red-600">{errors.sacco_id}</p>
-            )}
-          </div>
-        </div>
+        )}
 
         <div className="space-y-6">
-          <StarRating
-            rating={formData.cleanliness_rating}
-            onRatingChange={(rating) => handleRatingChange('cleanliness_rating', rating)}
-            label="Cleanliness Rating"
-            error={errors.cleanliness_rating}
-          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label htmlFor="commuter_id" style={styles.label}>
+                Commuter ID <span style={{ color: '#ff4444' }}>*</span>
+              </label>
+              <input
+                type="number"
+                id="commuter_id"
+                name="commuter_id"
+                value={formData.commuter_id}
+                onChange={handleInputChange}
+                style={{
+                  ...styles.input,
+                  ...(errors.commuter_id ? styles.inputError : {})
+                }}
+                className="input-focus"
+                placeholder="Enter your commuter ID"
+              />
+              {errors.commuter_id && (
+                <p style={styles.errorText}>{errors.commuter_id}</p>
+              )}
+            </div>
 
-          <StarRating
-            rating={formData.safety_rating}
-            onRatingChange={(rating) => handleRatingChange('safety_rating', rating)}
-            label="Safety Rating"
-            error={errors.safety_rating}
-          />
+            <div>
+              <label htmlFor="sacco_id" style={styles.label}>
+                Sacco ID <span style={{ color: '#ff4444' }}>*</span>
+              </label>
+              <input
+                type="number"
+                id="sacco_id"
+                name="sacco_id"
+                value={formData.sacco_id}
+                onChange={handleInputChange}
+                style={{
+                  ...styles.input,
+                  ...(errors.sacco_id ? styles.inputError : {})
+                }}
+                className="input-focus"
+                placeholder="Enter sacco ID"
+              />
+              {errors.sacco_id && (
+                <p style={styles.errorText}>{errors.sacco_id}</p>
+              )}
+            </div>
+          </div>
 
-          <StarRating
-            rating={formData.service_rating}
-            onRatingChange={(rating) => handleRatingChange('service_rating', rating)}
-            label="Service Rating"
-            error={errors.service_rating}
-          />
-        </div>
+          <div className="space-y-6">
+            <StarRating
+              rating={formData.cleanliness_rating}
+              onRatingChange={(rating) => handleRatingChange('cleanliness_rating', rating)}
+              label="Cleanliness Rating"
+              error={errors.cleanliness_rating}
+            />
 
-        <div>
-          <label htmlFor="review_text" className="block text-sm font-medium text-gray-700 mb-2">
-            Review (Optional)
-          </label>
-          <textarea
-            id="review_text"
-            name="review_text"
-            value={formData.review_text}
-            onChange={handleInputChange}
-            rows={4}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Share your detailed experience..."
-          />
-        </div>
+            <StarRating
+              rating={formData.safety_rating}
+              onRatingChange={(rating) => handleRatingChange('safety_rating', rating)}
+              label="Safety Rating"
+              error={errors.safety_rating}
+            />
 
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-            className={`inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white transition-colors ${
-              isSubmitting
-                ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
-            }`}
-          >
-            {isSubmitting ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Submitting...
-              </>
-            ) : (
-              <>
-                <Send size={16} className="mr-2" />
-                Submit Rating
-              </>
-            )}
-          </button>
+            <StarRating
+              rating={formData.service_rating}
+              onRatingChange={(rating) => handleRatingChange('service_rating', rating)}
+              label="Service Rating"
+              error={errors.service_rating}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="review_text" style={styles.label}>
+              Review (Optional)
+            </label>
+            <textarea
+              id="review_text"
+              name="review_text"
+              value={formData.review_text}
+              onChange={handleInputChange}
+              rows={4}
+              style={styles.input}
+              className="input-focus"
+              placeholder="Share your detailed experience..."
+            />
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              style={isSubmitting ? { ...styles.button, ...styles.buttonDisabled } : styles.button}
+              className="button-hover"
+            >
+              {isSubmitting ? (
+                <>
+                  <div style={styles.spinner}></div>
+                  Submitting...
+                </>
+              ) : (
+                <>
+                  <Send size={16} style={{ marginRight: '8px' }} />
+                  Submit Rating
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
