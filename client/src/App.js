@@ -13,6 +13,7 @@ import './App.css';
 import LostAndFound from './pages/lostandfound.js'; 
 import DriverAlertsForm from './pages/DriverAlertsForm.js';
 import RatingsDisplay from './pages/RatingsDisplay.js';
+import RatingForm from './pages/RatingForm.js';
 
 
 function App() {
@@ -31,6 +32,7 @@ function App() {
         <Route path="/lostandfound" element={<LostAndFound />} />
         <Route path="/driveralertsform" element={<DriverAlertsForm />} />
         <Route path="/ratingsdisplay" element={<RatingsDisplay />} />
+        <Route path="/ratingform" element={<RatingForm />} />
 
 
         {/* <Route path="/search" element={<Search />} /> */}

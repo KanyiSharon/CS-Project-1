@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Star, Plus, Filter, Search, User, Calendar, MessageCircle, RefreshCw } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const RatingsDisplay = () => {
   const [ratings, setRatings] = useState([]);
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filters, setFilters] = useState({
@@ -396,7 +398,11 @@ const RatingsDisplay = () => {
       </div>
 
       {/* Floating Plus Button */}
-      <button className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-4 shadow-lg hover:shadow-xl transition-all duration-200 focus:ring-4 focus:ring-blue-300">
+      <button
+        className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-4 shadow-lg hover:shadow-xl transition-all duration-200 focus:ring-4 focus:ring-blue-300"
+        onClick={() => navigate('/ratingform')}
+        title="Add new rating"
+      >
         <Plus size={24} />
       </button>
     </div>
