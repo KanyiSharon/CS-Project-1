@@ -17,8 +17,8 @@ function Navbar() {
   const navItems = [
     { path: '/', label: 'Home', icon: Home },
     { path: '/lostandfound', label: 'Lost&Found', icon: Search },
-    { path: '/map', label: 'Map', icon: MapPin },
-    { path: '/weather', label: 'Weather', icon: Cloud },
+    { path: '/ratingsdisplay', label: 'Ratings', icon: MapPin },
+    { path: '/driveralertsform', label: 'Driver Alert', icon: Cloud },
   ];
 
   return (
